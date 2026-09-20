@@ -1,0 +1,78 @@
+<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f6feb"><link rel="manifest" href="manifest.webmanifest">
+<title>FIRE資産管理</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;background:#f5f7fa;color:#17202a}
+header{background:#1f6feb;color:#fff;padding:18px 16px;position:sticky;top:0;z-index:5}h1{margin:0;font-size:21px}.sub{font-size:12px;opacity:.9}
+main{max-width:1050px;margin:auto;padding:14px 10px 50px}nav{display:flex;gap:7px;overflow:auto;margin-bottom:14px}
+nav button,button{border:0;border-radius:9px;padding:9px 13px;font-size:14px}nav button{background:#fff;border:1px solid #d7dce3;font-weight:600;white-space:nowrap}nav button.active,.primary{background:#1f6feb;color:#fff}
+.card{background:#fff;border:1px solid #e1e5ea;border-radius:14px;padding:15px;margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{padding:12px;background:#f7f9fc;border-radius:10px}.stat b{display:block;font-size:19px;margin-top:4px}.label,.small{font-size:12px;color:#657080}
+h2{font-size:18px;margin:2px 0 14px}form{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+label{font-size:12px;color:#4e5968;font-weight:600}input,select{width:100%;margin-top:5px;padding:10px;border:1px solid #cfd6df;border-radius:8px;font-size:15px}
+.full{grid-column:1/-1}.actions{display:flex;gap:8px;flex-wrap:wrap}.secondary{background:#eef2f7;color:#273444}.danger{background:#d93025;color:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 7px;border-bottom:1px solid #e6e9ee;text-align:left}th{background:#f7f9fc}
+.positive{color:#16803c}.negative{color:#c62828}.progress{height:12px;background:#e7ebf0;border-radius:8px;overflow:hidden}.bar{height:100%;background:#1f6feb}
+.empty{text-align:center;padding:20px;color:#7a8491}
+@media(max-width:720px){.grid{grid-template-columns:repeat(2,1fr)}form{grid-template-columns:1fr 1fr}table{font-size:12px}}
+@media(max-width:430px){form{grid-template-columns:1fr}.card{padding:13px}}
+</style></head><body>
+<header><h1>🔥 FIRE資産管理</h1><div class="sub">投資信託・分配金・評価額・FIRE目標をまとめて管理</div></header>
+<main><nav id="nav"></nav><section id="dashboard"></section><section id="funds" hidden></section><section id="dist" hidden></section><section id="valuation" hidden></section><section id="settings" hidden></section></main>
+<script>
+"use strict";
+const KEY="fireAssetManagerWeb_v1";
+let db={settings:{expense:400000,fireAsset:100000000,distGoal:4800000,tax:20.315},funds:[],distributions:[],valuations:[]};
+let edit={fund:null,dist:null,val:null};
+const $=id=>document.getElementById(id), id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,9);
+const n=x=>Number(x)||0, yen=x=>Math.round(n(x)).toLocaleString("ja-JP")+"円";
+const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function save(){localStorage.setItem(KEY,JSON.stringify(db));render()} function load(){try{let x=JSON.parse(localStorage.getItem(KEY)||"null");if(x)db={...db,...x,settings:{...db.settings,...(x.settings||{})}}}catch(e){}}
+const fname=fid=>db.funds.find(f=>f.id===fid)?.name||"不明";
+const cost=()=>db.funds.reduce((s,f)=>s+n(f.cost),0);
+const latest=f=>[...db.valuations.filter(v=>v.fundId===f.id)].sort((a,b)=>b.date.localeCompare(a.date))[0];
+const cum=fid=>db.distributions.filter(d=>d.fundId===fid).reduce((s,d)=>s+n(d.amount),0);
+const yearDist=()=>{let y=new Date().getFullYear();return db.distributions.filter(d=>String(d.date).startsWith(y+"")).reduce((s,d)=>s+n(d.amount),0)};
+function nav(){let a=[["dashboard","ダッシュボード"],["funds","投資信託"],["dist","分配金"],["valuation","評価額"],["settings","設定・データ"]];$("nav").innerHTML=a.map(x=>`<button data-t="${x[0]}">${x[1]}</button>`).join("");$("nav").querySelectorAll("button").forEach(b=>b.onclick=()=>{location.hash=b.dataset.t;show()})}
+function show(){let k=location.hash.slice(1)||"dashboard";["dashboard","funds","dist","valuation","settings"].forEach(x=>$(x).hidden=x!==k);$("nav").querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.t===k));({dashboard:dashboard,funds:funds,dist:dist,valuation:valuation,settings:settings}[k]||dashboard)()}
+function dashboard(){
+let c=cost(),v=db.funds.reduce((s,f)=>s+n(latest(f)?.value),0),d=yearDist(),r=v+db.distributions.reduce((s,x)=>s+n(x.amount),0)-c,p=n(db.settings.fireAsset),rate=p?v/p*100:0;
+$("dashboard").innerHTML=`<div class="grid"><div class="stat"><span class="label">購入総額</span><b>${yen(c)}</b></div><div class="stat"><span class="label">現在評価額</span><b>${yen(v)}</b></div><div class="stat"><span class="label">年間分配金（今年）</span><b>${yen(d)}</b></div><div class="stat"><span class="label">実質損益</span><b class="${r>=0?"positive":"negative"}">${yen(r)}</b></div></div>
+<div class="card"><h2>🔥 FIRE達成状況</h2><div class="small">FIRE資産目標：${yen(p)}</div><div class="progress" style="margin:9px 0"><div class="bar" style="width:${Math.min(100,rate)}%"></div></div><b>${rate.toFixed(1)}%</b><p class="small">月生活費：${yen(db.settings.expense)} ／ 年間分配金目標：${yen(db.settings.distGoal)} ／ 税率：${db.settings.tax}%</p></div>
+<div class="card"><h2>📊 投資信託別サマリー</h2>${db.funds.length?`<div style="overflow:auto"><table><tr><th>ファンド</th><th>購入額</th><th>評価額</th><th>分配金累計</th><th>実質損益</th></tr>${db.funds.map(f=>{let v=n(latest(f)?.value),c=n(f.cost),d=cum(f.id),r=v+d-c;return`<tr><td>${esc(f.name)}</td><td>${yen(c)}</td><td>${yen(v)}</td><td>${yen(d)}</td><td class="${r>=0?"positive":"negative"}">${yen(r)}</td></tr>`}).join("")}</table></div>`:"<div class=empty>「投資信託」から登録してください。</div>"}</div>`}
+function funds(){
+let f=edit.fund?db.funds.find(x=>x.id===edit.fund):null;
+$("funds").innerHTML=`<div class=card><h2>💰 投資信託登録</h2><form id=ff><div><label>ファンド名<input id=fn required value="${esc(f?.name||"")}"></label></div><div><label>購入日<input id=fd type=date required value="${f?.date||""}"></label></div><div><label>購入総額<input id=fc type=number min=0 required value="${f?.cost??""}"></label></div><div><label>口数<input id=fu type=number min=0 step=.0001 value="${f?.units??""}"></label></div><div class="full actions"><button class=primary>${f?"更新":"登録"}</button>${f?'<button type=button class=secondary id=cancel>キャンセル</button>':""}</div></form></div>
+<div class=card><h2>📋 登録済みファンド</h2>${db.funds.length?`<div style="overflow:auto"><table><tr><th>ファンド</th><th>購入日</th><th>購入額</th><th>口数</th><th>操作</th></tr>${db.funds.map(x=>`<tr><td>${esc(x.name)}</td><td>${x.date||"-"}</td><td>${yen(x.cost)}</td><td>${n(x.units).toLocaleString()}</td><td><button class=secondary data-e="${x.id}">編集</button> <button class=danger data-d="${x.id}">削除</button></td></tr>`).join("")}</table></div>`:"<div class=empty>まだ登録されていません。</div>"}</div>`;
+$("ff").onsubmit=e=>{e.preventDefault();let o={id:f?.id||id(),name:fn.value.trim(),date:fd.value,cost:n(fc.value),units:n(fu.value)};if(f)Object.assign(f,o);else db.funds.push(o);edit.fund=null;save()};
+$("cancel")?.addEventListener("click",()=>{edit.fund=null;funds()});document.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{edit.fund=b.dataset.e;funds()});
+document.querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{if(confirm("削除しますか？関連データも削除されます。")){let x=b.dataset.d;db.funds=db.funds.filter(f=>f.id!==x);db.distributions=db.distributions.filter(d=>d.fundId!==x);db.valuations=db.valuations.filter(v=>v.fundId!==x);save()}})}
+function dist(){
+let d=edit.dist?db.distributions.find(x=>x.id===edit.dist):null;
+$("dist").innerHTML=`<div class=card><h2>💵 分配金登録</h2><form id=df><div><label>ファンド<select id=di required><option value="">選択</option>${db.funds.map(f=>`<option value="${f.id}" ${f.id===d?.fundId?"selected":""}>${esc(f.name)}</option>`).join("")}</select></label></div><div><label>支払日<input id=dd type=date required value="${d?.date||""}"></label></div><div><label>分配金額<input id=da type=number min=0 required value="${d?.amount??""}"></label></div><div><label>種類<select id=dt><option ${d?.type==="普通分配金"?"selected":""}>普通分配金</option><option ${d?.type==="特別分配金"?"selected":""}>特別分配金</option></select></label></div><div class="full actions"><button class=primary>${d?"更新":"登録"}</button>${d?'<button type=button class=secondary id=dc>キャンセル</button>':""}</div></form></div>
+<div class=card><h2>📋 分配金履歴</h2>${db.distributions.length?`<div style="overflow:auto"><table><tr><th>日付</th><th>ファンド</th><th>種類</th><th>金額</th><th>操作</th></tr>${[...db.distributions].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<tr><td>${x.date}</td><td>${esc(fname(x.fundId))}</td><td>${x.type}</td><td>${yen(x.amount)}</td><td><button class=secondary data-de="${x.id}">編集</button> <button class=danger data-dd="${x.id}">削除</button></td></tr>`).join("")}</table></div>`:"<div class=empty>まだ登録されていません。</div>"}</div>`;
+$("df").onsubmit=e=>{e.preventDefault();let o={id:d?.id||id(),fundId:di.value,date:dd.value,amount:n(da.value),type:dt.value};if(d)Object.assign(d,o);else db.distributions.push(o);edit.dist=null;save()};$("dc")?.addEventListener("click",()=>{edit.dist=null;dist()});
+document.querySelectorAll("[data-de]").forEach(b=>b.onclick=()=>{edit.dist=b.dataset.de;dist()});document.querySelectorAll("[data-dd]").forEach(b=>b.onclick=()=>{if(confirm("削除しますか？")){db.distributions=db.distributions.filter(x=>x.id!==b.dataset.dd);save()}})}
+function valuation(){
+let v=edit.val?db.valuations.find(x=>x.id===edit.val):null;
+$("valuation").innerHTML=`<div class=card><h2>📈 評価額登録</h2><form id=vf><div><label>ファンド<select id=vi required><option value="">選択</option>${db.funds.map(f=>`<option value="${f.id}" ${f.id===v?.fundId?"selected":""}>${esc(f.name)}</option>`).join("")}</select></label></div><div><label>基準日<input id=vd type=date required value="${v?.date||""}"></label></div><div><label>現在評価額<input id=vv type=number min=0 required value="${v?.value??""}"></label></div><div><label>現在口数<input id=vu type=number min=0 step=.0001 value="${v?.units??""}"></label></div><div class="full actions"><button class=primary>${v?"更新":"登録"}</button>${v?'<button type=button class=secondary id=vc>キャンセル</button>':""}</div></form></div>
+<div class=card><h2>📋 評価額履歴</h2>${db.valuations.length?`<div style="overflow:auto"><table><tr><th>日付</th><th>ファンド</th><th>評価額</th><th>含み損益</th><th>実質損益</th><th>操作</th></tr>${[...db.valuations].sort((a,b)=>b.date.localeCompare(a.date)).map(x=>{let c=n(db.funds.find(f=>f.id===x.fundId)?.cost),d=cum(x.fundId),p=n(x.value)-c,r=n(x.value)+d-c;return`<tr><td>${x.date}</td><td>${esc(fname(x.fundId))}</td><td>${yen(x.value)}</td><td class="${p>=0?"positive":"negative"}">${yen(p)}</td><td class="${r>=0?"positive":"negative"}">${yen(r)}</td><td><button class=secondary data-ve="${x.id}">編集</button> <button class=danger data-vd="${x.id}">削除</button></td></tr>`}).join("")}</table></div>`:"<div class=empty>まだ登録されていません。</div>"}</div>`;
+$("vf").onsubmit=e=>{e.preventDefault();let o={id:v?.id||id(),fundId:vi.value,date:vd.value,value:n(vv.value),units:n(vu.value)};if(v)Object.assign(v,o);else db.valuations.push(o);edit.val=null;save()};$("vc")?.addEventListener("click",()=>{edit.val=null;valuation()});
+document.querySelectorAll("[data-ve]").forEach(b=>b.onclick=()=>{edit.val=b.dataset.ve;valuation()});document.querySelectorAll("[data-vd]").forEach(b=>b.onclick=()=>{if(confirm("削除しますか？")){db.valuations=db.valuations.filter(x=>x.id!==b.dataset.vd);save()}})}
+function settings(){
+let s=db.settings;$("settings").innerHTML=`<div class=card><h2>🔥 FIRE設定</h2><form id=sf><div><label>月生活費<input id=se type=number value="${s.expense}"></label></div><div><label>FIRE資産目標<input id=sa type=number value="${s.fireAsset}"></label></div><div><label>年間分配金目標<input id=sg type=number value="${s.distGoal}"></label></div><div><label>税率（%）<input id=st type=number step=.001 value="${s.tax}"></label></div><div class=full><button class=primary>保存</button></div></form></div>
+<div class=card><h2>💾 データ管理</h2><p class=small>データはこのブラウザ内に保存されます。機種変更時はバックアップを保存してください。</p><div class=actions><button class=primary id=ex>バックアップ保存</button><label class=secondary style="cursor:pointer">バックアップ復元<input id=im type=file accept=.json hidden></label><button class=danger id=cl>全データ削除</button></div></div>
+<div class=card><h2>📊 CSV出力</h2><div class=actions><button class=secondary id=cf>投資信託CSV</button><button class=secondary id=cd>分配金CSV</button><button class=secondary id=cv>評価額CSV</button></div></div>`;
+$("sf").onsubmit=e=>{e.preventDefault();db.settings={expense:n(se.value),fireAsset:n(sa.value),distGoal:n(sg.value),tax:n(st.value)};save()};
+$("ex").onclick=()=>download("fire-asset-backup.json",JSON.stringify(db,null,2),"application/json");
+$("im").onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.funds||!x.distributions||!x.valuations)throw 0;db=x;save();alert("復元しました")}catch(z){alert("バックアップを読み込めませんでした")}};r.readAsText(f)};
+$("cl").onclick=()=>{if(confirm("全データを削除しますか？")){localStorage.removeItem(KEY);location.reload()}};
+$("cf").onclick=()=>csv([["ファンド名","購入日","購入総額","口数"],...db.funds.map(x=>[x.name,x.date,x.cost,x.units])],"funds.csv");
+$("cd").onclick=()=>csv([["ファンド","支払日","金額","種類"],...db.distributions.map(x=>[fname(x.fundId),x.date,x.amount,x.type])],"distributions.csv");
+$("cv").onclick=()=>csv([["ファンド","基準日","評価額","口数"],...db.valuations.map(x=>[fname(x.fundId),x.date,x.value,x.units])],"valuations.csv")}
+function download(name,text,type){let a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function csv(rows,name){download(name,"\ufeff"+rows.map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n"),"text/csv")}
+function render(){nav();show()}load();render();addEventListener("hashchange",show);
+if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js").catch(()=>{}));
+</script></body></html>
